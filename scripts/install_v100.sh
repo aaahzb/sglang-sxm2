@@ -22,6 +22,25 @@ trap on_error ERR
 log() { printf '\n\033[1;34m[install_v100]\033[0m %s\n' "$*"; }
 die() { printf '\n\033[1;31m[install_v100] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
+# --- ensure CMake >= 3.26 for sglang-kernel AOT build ---------------------------
+install_cmake_if_needed() {
+  local required_major=3 required_minor=26
+  local current_version current_major current_minor
+  current_version="$(cmake --version 2>/dev/null | head -n1 | awk '{print $3}')"
+  if [[ -n "$current_version" ]]; then
+    current_major="${current_version%%.*}"
+    current_minor="${current_version#*.}"
+    current_minor="${current_minor%%.*}"
+    if [[ "$current_major" -gt "$required_major" ]] || { [[ "$current_major" -eq "$required_major" ]] && [[ "$current_minor" -ge "$required_minor" ]]; }; then
+      return 0
+    fi
+  fi
+  echo "[install_v100] CMake >= 3.26 required, installing via pip"
+  python -m pip install --upgrade "cmake>=3.26"
+}
+install_cmake_if_needed
+# -------------------------------------------------------------------------------
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPS_ROOT="${SGLANG_V100_DEPS_DIR:-$HOME/.cache/sglang-v100-sources}"
 FLASHINFER_REV="c3c40a7b90b792fc59f90f8f55c9e2de9c1b6833"
@@ -42,7 +61,7 @@ log "Installing host compiler and CUDA 12.8 prerequisites"
 "${SUDO[@]}" apt-get update
 "${SUDO[@]}" apt-get install -y \
   build-essential ca-certificates cmake curl git g++-12 g++-14 libnuma-dev \
-  ninja-build pkg-config wget
+  libssl-dev ninja-build pkg-config wget
 
 # SGLang's Rust extensions use edition 2024 (rustc 1.85+); distro cargo is often
 # older, so fall back to a user-local rustup toolchain.
@@ -206,7 +225,7 @@ TURBOMIND_SOURCE_DIR="$DEPS_ROOT/turbomind-sm70-source"
 prepare_sparse_repo \
   "LMDeploy/1Cat TurboMind" https://github.com/1CatAI/1Cat-vLLM.git \
   "$TURBOMIND_SOURCE_REV" "$TURBOMIND_SOURCE_DIR" \
-  LICENSE csrc/core csrc/sm70_turbomind csrc/moe
+  LICENSE csrc/
 
 TURBOMIND_CUTLASS_DIR="$DEPS_ROOT/cutlass-turbomind"
 prepare_patched_repo \

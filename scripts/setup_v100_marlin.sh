@@ -48,7 +48,13 @@ SM70_PATCHES=(
   "$PATCH_DIR/marlin-v100-qwen38-nvfp4-tuning.patch"
 )
 if [[ "${MARLIN_V100_SKIP_BF16_COMPAT:-0}" != 1 ]]; then
-  SM70_PATCHES+=("$PATCH_DIR/marlin-v100-sm70.patch")
+  # CUDA 12.8+ already provides the bf16 vector intrinsics that this patch
+  # shims for older toolkits; applying it on 12.8+ causes redefinition errors.
+  if [[ "${CUDA_VER:-}" =~ ^12\.([8-9]|[0-9]{2}) ]] || [[ "${CUDA_VER:-}" =~ ^1[3-9]\. ]]; then
+    log "CUDA ${CUDA_VER} detected; skipping marlin-v100-sm70.patch (bf16 compat not needed)"
+  else
+    SM70_PATCHES+=("$PATCH_DIR/marlin-v100-sm70.patch")
+  fi
 fi
 if [[ ! -d "$REPO/.git" ]]; then
   log "cloning marlin_v100 to $REPO"
